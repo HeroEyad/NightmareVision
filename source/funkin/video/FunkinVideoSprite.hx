@@ -57,6 +57,11 @@ class FunkinVideoSprite extends FlxVideoSprite
 	 * * Disable this if you dont want your video to pause when paused in `PlayState`
 	 */
 	public var isStateAffected:Bool = true;
+	
+	/**
+    * Bool that decides if the video can be skipped.
+    */
+	public var canSkip:Bool = false;
 
 	/**
 	 * The playback speed of the video. 1.0 is normal speed.
@@ -81,9 +86,10 @@ class FunkinVideoSprite extends FlxVideoSprite
 	 * @param y `y` position
 	 * @param oneTimeUse if `true` on video complete, the video will self destroy
 	 */
-	public function new(x:Float = 0, y:Float = 0, oneTimeUse:Bool = true)
+	public function new(x:Float = 0, y:Float = 0, oneTimeUse:Bool = true, isSkippable = true)
 	{
 		super(x, y);
+		canSkip = isSkippable;
 		
 		if (oneTimeUse) bitmap.onEndReached.add(this.destroy, true, -10);
 	}

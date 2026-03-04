@@ -9,31 +9,25 @@ import hxvlc.util.Location;
 
 /**
  * Handles video playback as a `FlxSprite`. Has additional features for ease
- * 
- * If used in `PlayState`, will autopause when the game is paused too
- * 
- * General Usage:
+ * * If used in `PlayState`, will autopause when the game is paused too
+ * * General Usage:
  * ```haxe
- * 	var video = new FunkinVideoSprite(x,y);
- * 	add(video);
- * 	video.onFormat(()->{
- * 		video.setGraphicSize(0,FlxG.height);
- * 		video.updateHitbox();
- * 		video.screenCenter(FlxAxes.X);
- * 
- * 	});
- * 	if (video.load(Paths.video('pathToVideo')))
- * 	{
+ * var video = new FunkinVideoSprite(x,y);
+ * add(video);
+ * video.onFormat(()->{
+ * video.fitToScreen();
+ * * });
+ * if (video.load(Paths.video('pathToVideo')))
+ * {
  *		video.delayAndStart();
- * 	}
+ * }
  * ```
  */
 class FunkinVideoSprite extends FlxVideoSprite
 {
 	/**
 	 * Video loading argument to make the video loop
-	 * 
-	 * Usage:
+	 * * Usage:
 	 * ```haxe
 	 * video.load(Paths.video(''),[FunkinVideoSprite.looping]);
 	 * ```
@@ -43,8 +37,7 @@ class FunkinVideoSprite extends FlxVideoSprite
 	/**
 	 * Video loading argument to make the video muted
 	 * Use if your video doesnt require audio
-	 * 
-	 * Usage:
+	 * * Usage:
 	 * ```haxe
 	 * video.load(Paths.video(''),[FunkinVideoSprite.muted]);
 	 * ```
@@ -61,15 +54,26 @@ class FunkinVideoSprite extends FlxVideoSprite
 	
 	/**
 	 * Bool that decides if `this` should be affected by states
-	 * 
-	 * Disable this if you dont want your video to pause when paused in `PlayState`
+	 * * Disable this if you dont want your video to pause when paused in `PlayState`
 	 */
 	public var isStateAffected:Bool = true;
 
 	/**
-    * Bool that decides if the video can be skipped.
-    */
-	public var canSkip:Bool = false;
+	 * The playback speed of the video. 1.0 is normal speed.
+	 */
+	public var playbackRate(default, set):Float = 1.0;
+
+	function set_playbackRate(value:Float):Float
+	{
+		if (bitmap != null)
+			bitmap.rate = value;
+		
+		return playbackRate = value;
+	}
+
+	/** Returns whether the video is currently playing. */
+	public var isPlaying(get, never):Bool;
+	inline function get_isPlaying():Bool return bitmap != null && bitmap.isPlaying;
 	
 	/**
 	 * Creates a new FunkinVideoSprite
@@ -77,24 +81,74 @@ class FunkinVideoSprite extends FlxVideoSprite
 	 * @param y `y` position
 	 * @param oneTimeUse if `true` on video complete, the video will self destroy
 	 */
-	public function new(x:Float = 0, y:Float = 0, oneTimeUse:Bool = true, isSkippable = false)
+	public function new(x:Float = 0, y:Float = 0, oneTimeUse:Bool = true)
 	{
 		super(x, y);
-		canSkip = isSkippable;
+		
 		if (oneTimeUse) bitmap.onEndReached.add(this.destroy, true, -10);
 	}
 	
+	override public function update(elapsed:Float)
+	{
+		super.update(elapsed);
+
+		if (bitmap != null && bitmap.isPlaying)
+		{
+			bitmap.volume = FlxG.sound.muted ? 0 : Std.int(FlxG.sound.volume * 100); // syncing.
+		}
+
+		if (controls.ACCEPT && bitmap != null && bitmap.isPlaying) {
+			skip();
+		}
+	}
+
 	/**
 	 * Starts the video but sets a delay before starting
-	 * 
-	 * Recommended over `this.play`
+	 * * Recommended over `this.play`
 	 * @param delay The delay before the video starts. default is next update call
 	 */
 	public function delayAndStart(delay:Float = 0)
 	{
-		FlxTimer.wait(delay, function() {
-			if (bitmap != null) play();
+		FlxTimer.wait(delay, () -> {
+			if (bitmap != null)
+				play();
 		});
+	}
+
+	/** Pauses the video. */
+	public function pause()
+	{
+		if (bitmap != null) bitmap.pause();
+	}
+
+	/** Resumes the video. */
+	public function resume()
+	{
+		if (bitmap != null) bitmap.resume();
+	}
+
+	/**
+	 * Stops the video immediately and triggers the onEndReached event.
+	 * Useful for skipping cutscenes.
+	 */
+	public function skip()
+	{
+		if (bitmap != null && bitmap.isPlaying)
+		{
+			bitmap.stop();
+			bitmap.onEndReached.dispatch(); 
+		}
+	}
+
+	/**
+	 * Quickly scales and centers the video to fit the entire screen.
+	 * Best used inside the `onFormat` callback!
+	 */
+	public function fitToScreen()
+	{
+		setGraphicSize(FlxG.width, FlxG.height);
+		updateHitbox();
+		screenCenter();
 	}
 	
 	/**
@@ -104,8 +158,7 @@ class FunkinVideoSprite extends FlxVideoSprite
 	 */
 	public function onEnd(func:Void->Void, once:Bool = false, priority:Int = 0)
 	{
-		if (bitmap != null)
-			bitmap.onEndReached.add(func, once, priority);
+		bitmap.onEndReached.add(func, once, priority);
 	}
 	
 	/**
@@ -115,49 +168,25 @@ class FunkinVideoSprite extends FlxVideoSprite
 	 */
 	public function onStart(func:Void->Void, once:Bool = false, priority:Int = 0)
 	{
-		if (bitmap != null)
-			bitmap.onOpening.add(func, once, priority);
+		bitmap.onOpening.add(func, once, priority);
 	}
 	
 	/**
 	 * Adds a event to be dispatched when the video has formatted itself 
-	 * 
-	 * Recommended to setup ur video during this event
+	 * * Recommended to setup ur video during this event
 	 * example: 
 	 * ```haxe
-	 * 	onFormat(()->{
-	 * 		this.scale.set(3,3);
-	 * 		this.updateHitbox();
-	 * 		this.cameras = [camera];
-	 * 	});
+	 * onFormat(()->{
+	 * this.fitToScreen();
+	 * this.cameras = [camera];
+	 * });
 	 * ```
 	 * @param func the event to be called
 	 * @param once if this event should be dispatched once, or every time the video ends.
 	 */
 	public function onFormat(func:Void->Void, once:Bool = false, priority:Int = 0)
 	{
-		if (bitmap != null)
-			bitmap.onFormatSetup.add(func, once, priority);
-	}
-
-	/**
-     * Stops the video immediately and triggers the onEndReached event.
-     * Useful for skipping cutscenes.
-     */
-     public function skip() {
-		 if (bitmap != null && bitmap.isPlaying)
-		 {
-			 bitmap.stop();
-		 }
-	 }
-
-
-	override public function update(elapsed:Float) 
-	{
-		if (canSkip && controls.ACCEPT) 
-		{
-			skip();
-		}
+		bitmap.onFormatSetup.add(func, once, priority);
 	}
 	
 	override function destroy()
@@ -165,7 +194,7 @@ class FunkinVideoSprite extends FlxVideoSprite
 		if (bitmap != null)
 		{
 			bitmap.stop();
-			bitmap.onEndReached.removeAll();
+			bitmap.onEndReached.removeAll(); 
 			
 			bitmap.onFormatSetup.removeAll();
 			
